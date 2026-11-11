@@ -51,9 +51,9 @@ struct GitHubProvisioner: Sendable {
         config: GitHubProvisionerConfig,
         runnerName: String,
         runnerToken: String
-    ) -> [String] {
+    ) throws -> [String] {
         let labels = labelsString(extraLabels: config.extraLabels)
-        let url = runnerURL(organization: config.organization, repository: config.repository)
+        let url = try config.resolvedServer().runnerURL(organization: config.organization, repository: config.repository)
         let runnerGroupArgument = config.runnerGroup.map { " --runnergroup \(Self.shellQuote($0))" } ?? ""
         return [
             "rm -rf ~/actions-runner && mkdir ~/actions-runner",
@@ -75,12 +75,5 @@ struct GitHubProvisioner: Sendable {
             labels.append(contentsOf: extraLabels)
         }
         return labels.joined(separator: ",")
-    }
-
-    private func runnerURL(organization: String, repository: String?) -> String {
-        if let repository {
-            return "https://github.com/\(organization)/\(repository)"
-        }
-        return "https://github.com/\(organization)"
     }
 }

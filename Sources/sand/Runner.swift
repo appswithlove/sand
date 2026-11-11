@@ -255,7 +255,7 @@ struct Runner: Sendable {
                     }
                 }
                 try await installRunnerTarball(ssh: ssh)
-                let commands = provisioner.script(
+                let commands = try provisioner.script(
                     config: githubConfig,
                     runnerName: runnerName,
                     runnerToken: token
