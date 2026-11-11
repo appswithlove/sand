@@ -412,7 +412,8 @@ extension Config.Provisioner {
                 privateKeyPath: Config.expandPath(github.privateKeyPath),
                 runnerName: github.runnerName,
                 extraLabels: github.extraLabels,
-                runnerGroup: github.runnerGroup
+                runnerGroup: github.runnerGroup,
+                serverURL: github.serverURL
             )
             return Config.Provisioner(type: type, script: nil, github: expanded)
         }

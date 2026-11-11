@@ -6,6 +6,8 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
     let runnerName: String
     let extraLabels: [String]?
     let runnerGroup: String?
+    /// Web URL of the GitHub instance. `nil` means github.com.
+    let serverURL: String?
 
     init(
         appId: Int,
@@ -14,7 +16,8 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
         privateKeyPath: String,
         runnerName: String,
         extraLabels: [String]?,
-        runnerGroup: String? = nil
+        runnerGroup: String? = nil,
+        serverURL: String? = nil
     ) {
         self.appId = appId
         self.organization = organization
@@ -23,6 +26,17 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
         self.runnerName = runnerName
         self.extraLabels = extraLabels
         self.runnerGroup = runnerGroup
+        self.serverURL = serverURL
+    }
+
+    func resolvedServer() throws -> GitHubServer {
+        guard let serverURL else {
+            return .dotCom
+        }
+        guard let server = GitHubServer(string: serverURL) else {
+            throw GitHubServerError.invalidServerURL(serverURL)
+        }
+        return server
     }
 }
 

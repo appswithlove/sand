@@ -195,6 +195,51 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.runners.first?.provisioner.github?.runnerGroup, "mac-fleet")
     }
 
+    func testServerURLDecodesAndSurvivesExpansion() throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/acme/vm:latest
+            provisioner:
+              type: github
+              config:
+                appId: 42
+                organization: acme
+                privateKeyPath: ~/key.pem
+                runnerName: runner-1
+                serverURL: https://acme.ghe.com
+        """
+        let github = try XCTUnwrap(Config.load(path: writeTempFile(contents: yaml).path).runners.first?.provisioner.github)
+        XCTAssertEqual(github.serverURL, "https://acme.ghe.com")
+        XCTAssertEqual(try github.resolvedServer().webURL, "https://acme.ghe.com")
+    }
+
+    func testServerURLDefaultsToGitHubDotCom() throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/acme/vm:latest
+            provisioner:
+              type: github
+              config:
+                appId: 42
+                organization: acme
+                privateKeyPath: ~/key.pem
+                runnerName: runner-1
+        """
+        let github = try XCTUnwrap(Config.load(path: writeTempFile(contents: yaml).path).runners.first?.provisioner.github)
+        XCTAssertNil(github.serverURL)
+        XCTAssertEqual(try github.resolvedServer(), .dotCom)
+        XCTAssertEqual(try github.resolvedServer().webURL, "https://github.com")
+        XCTAssertEqual(try github.resolvedServer().apiBaseURL.absoluteString, "https://api.github.com")
+    }
+
     func testFixturesLoad() throws {
         let fixtures = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

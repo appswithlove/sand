@@ -178,6 +178,9 @@ final class ConfigValidator {
                     issues.append(.init(severity: .error, message: "provisioner.config.runnerGroup requires organization-level registration; remove provisioner.config.repository."))
                 }
             }
+            if let serverURL = github.serverURL, GitHubServer(string: serverURL) == nil {
+                issues.append(.init(severity: .error, message: "provisioner.config.serverURL must be an https URL with a host and no path, e.g. https://github.com."))
+            }
         }
     }
 

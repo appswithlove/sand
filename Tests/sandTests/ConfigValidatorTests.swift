@@ -206,4 +206,47 @@ final class ConfigValidatorTests: XCTestCase {
             message: "runner runner-1: provisioner.config.runnerGroup requires organization-level registration; remove provisioner.config.repository."
         )))
     }
+
+    func testServerURLValidation() throws {
+        let keyURL = try writeTempFile(contents: "key", suffix: ".pem")
+        func issues(serverURL: String?) -> [ConfigValidationIssue] {
+            let github = GitHubProvisionerConfig(
+                appId: 1,
+                organization: "acme",
+                repository: nil,
+                privateKeyPath: keyURL.path,
+                runnerName: "runner-1",
+                extraLabels: nil,
+                serverURL: serverURL
+            )
+            let runner = Config.RunnerConfig(
+                name: "runner-1",
+                vm: Config.VM(
+                    source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", name: nil),
+                    hardware: nil,
+                    mounts: [],
+                    cache: Config.Cache(hostPath: "/tmp/sand-cache", name: nil),
+                    run: .default,
+                    diskSizeGb: nil,
+                    ssh: .standard
+                ),
+                provisioner: Config.Provisioner(type: .github, script: nil, github: github),
+                preRun: nil,
+                postRun: nil,
+                stopAfter: 1,
+                healthCheck: Config.HealthCheck(command: "true")
+            )
+            return ConfigValidator().validate(Config(runners: [runner]))
+        }
+        let invalid = ConfigValidationIssue(
+            severity: .error,
+            message: "runner runner-1: provisioner.config.serverURL must be an https URL with a host and no path, e.g. https://github.com."
+        )
+        for valid in [nil, "https://github.com", "https://acme.ghe.com", "https://acme.ghe.com/", "https://ghes.example.com:8443"] {
+            XCTAssertTrue(issues(serverURL: valid).isEmpty, valid ?? "nil")
+        }
+        for bad in ["", "acme.ghe.com", "http://acme.ghe.com", "https://", "https://ghes.example.com/api/v3", "https://user@ghes.example.com"] {
+            XCTAssertEqual(issues(serverURL: bad), [invalid], bad)
+        }
+    }
 }
