@@ -104,6 +104,13 @@ For `local` sources sand skips the registry pull and clones the named VM directl
 2) Install the app on the organization or the specific repository you want to run against.
 3) Download the private key and set `appId`, `organization`, `repository` (optional), and `privateKeyPath` in your config.
 4) Optionally set `runnerGroup` to register organization-level runners into a runner group (requires omitting `repository`).
+5) Optionally set `serverURL` for GitHub Enterprise (default `https://github.com`). sand derives the REST API URL from it:
+   - `https://github.com` → `https://api.github.com`
+   - `https://<name>.ghe.com` (Enterprise Cloud with data residency) → `https://api.<name>.ghe.com`
+   - any other host (Enterprise Server) → `https://<host>/api/v3`
+
+   Create and install the GitHub App on that instance. The runner tarball still comes from github.com releases.
+6) Optionally set `setupCommands`, a list of shell lines that run in the VM after the runner is extracted and before `config.sh`. Each line is a separate SSH command: `cd` or `export` does not carry over to later lines, and a failing line does not stop registration. Quote lines that contain `: `. sand logs each line as written, so do not put secrets in them.
 
 Each VM boot registers the runner as `<runnerName>-<5 hex chars>` so a VM killed mid-session never collides with the next boot's GitHub session. Sand deletes that registration from GitHub when it tears the VM down.
 
@@ -139,6 +146,22 @@ Common pitfalls:
 - `vm.cache.host` must be a directory (missing paths are created; file paths are rejected).
 - `vm.cache` is ignored unless the provisioner type is `github`.
 - `scp` must be available on the host.
+
+GitHub Enterprise Cloud (data residency), repository runner:
+```
+    provisioner:
+      type: github
+      config:
+        appId: 123456
+        organization: my-org
+        repository: my-repo
+        privateKeyPath: ~/my-app.private-key.pem
+        runnerName: runner-1
+        serverURL: https://my-enterprise.ghe.com
+        setupCommands:
+          - sudo xcode-select -s /Applications/Xcode.app
+          - "echo 'setup: done'"
+```
 
 ### Custom provisioner script
 
@@ -179,9 +202,12 @@ runners:
         noClipboard: false  # default false; pass --no-clipboard when true
         nested: false       # default false; pass --nested for nested virtualization
         rootDiskOpts: null  # optional; passed as --root-disk-opts
+        netSoftnet: false   # default false; pass --net-softnet
 ```
 
 Set `nested: true` to boot the VM with `tart run --nested`, enabling nested virtualization inside the guest. This requires an Apple Silicon host and guest that support it (see the [Tart docs](https://tart.run/)).
+
+Set `netSoftnet: true` to boot the VM with `tart run --net-softnet` (Softnet network isolation). Softnet must be installed and set up on the host as the Tart docs describe.
 
 Set `rootDiskOpts` to tune the root disk with `tart run --root-disk-opts`. Since runner VMs are thrown away after each job, `caching=cached,sync=none` trades crash consistency for much faster guest fsync.
 
