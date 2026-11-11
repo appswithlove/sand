@@ -135,7 +135,8 @@ struct Run: AsyncParsableCommand {
             auth: auth,
             session: URLSession.shared,
             organization: githubConfig.organization,
-            repository: githubConfig.repository
+            repository: githubConfig.repository,
+            baseURL: try githubConfig.resolvedServer().apiBaseURL
         )
     }
 }

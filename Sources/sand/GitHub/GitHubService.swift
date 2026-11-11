@@ -8,6 +8,7 @@ extension URLSession: URLSessionProtocol {}
 
 enum GitHubServiceError: Error {
     case invalidResponse
+    case invalidURL(String)
     case httpError(status: Int, body: String)
 }
 
@@ -38,7 +39,22 @@ struct GitHubService: Sendable {
     let session: URLSessionProtocol
     let organization: String
     let repository: String?
-    let baseURL = URL(string: "https://api.github.com")!
+    /// REST API root, e.g. `https://api.github.com` or `https://ghes.example.com/api/v3`.
+    let baseURL: URL
+
+    init(
+        auth: GitHubAuthenticating,
+        session: URLSessionProtocol,
+        organization: String,
+        repository: String?,
+        baseURL: URL = GitHubServer.dotCom.apiBaseURL
+    ) {
+        self.auth = auth
+        self.session = session
+        self.organization = organization
+        self.repository = repository
+        self.baseURL = baseURL
+    }
 
     func runnerRegistrationToken() async throws -> String {
         let installationId = try await installationID()
@@ -81,7 +97,9 @@ struct GitHubService: Sendable {
     }
 
     private func send(path: String, method: String, token: String) async throws -> Data {
-        let url = URL(string: path, relativeTo: baseURL)!
+        guard let url = GitHubServer.apiURL(baseURL: baseURL, path: path) else {
+            throw GitHubServiceError.invalidURL(path)
+        }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
