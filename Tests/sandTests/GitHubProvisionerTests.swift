@@ -7,7 +7,8 @@ final class GitHubProvisionerTests: XCTestCase {
         repository: String? = nil,
         extraLabels: [String]? = nil,
         runnerGroup: String? = nil,
-        serverURL: String? = nil
+        serverURL: String? = nil,
+        setupCommands: [String]? = nil
     ) -> GitHubProvisionerConfig {
         GitHubProvisionerConfig(
             appId: 1,
@@ -17,7 +18,8 @@ final class GitHubProvisionerTests: XCTestCase {
             runnerName: "runner-1",
             extraLabels: extraLabels,
             runnerGroup: runnerGroup,
-            serverURL: serverURL
+            serverURL: serverURL,
+            setupCommands: setupCommands
         )
     }
 
@@ -74,6 +76,24 @@ final class GitHubProvisionerTests: XCTestCase {
         XCTAssertThrowsError(try GitHubProvisioner().script(config: config(serverURL: "http://ghes.example.com"), runnerName: "runner-1", runnerToken: "token")) { error in
             XCTAssertEqual(error as? GitHubServerError, .invalidServerURL("http://ghes.example.com"))
         }
+    }
+
+    func testSetupCommandsRunAfterExtractBeforeConfig() throws {
+        let script = try GitHubProvisioner().script(
+            config: config(repository: "repo", setupCommands: ["sudo xcode-select -s /Applications/Xcode.app", "echo two"]),
+            runnerName: "runner-1",
+            runnerToken: "token"
+        )
+        XCTAssertEqual(script, [
+            "rm -rf ~/actions-runner && mkdir ~/actions-runner",
+            "tar xzf ~/actions-runner.tar.gz -C ~/actions-runner",
+            "echo \"Runner extracted\"",
+            "sudo xcode-select -s /Applications/Xcode.app",
+            "echo two",
+            "~/actions-runner/config.sh --url https://github.com/org/repo --name runner-1 --token token --ephemeral --unattended --replace --labels sand",
+            "echo \"Runner configured, starting ~/actions-runner/run.sh\"",
+            "~/actions-runner/run.sh"
+        ])
     }
 
     func testUniqueRunnerNameAppendsHexSuffix() {

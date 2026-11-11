@@ -413,7 +413,8 @@ extension Config.Provisioner {
                 runnerName: github.runnerName,
                 extraLabels: github.extraLabels,
                 runnerGroup: github.runnerGroup,
-                serverURL: github.serverURL
+                serverURL: github.serverURL,
+                setupCommands: github.setupCommands
             )
             return Config.Provisioner(type: type, script: nil, github: expanded)
         }

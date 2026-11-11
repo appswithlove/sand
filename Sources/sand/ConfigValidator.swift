@@ -181,6 +181,10 @@ final class ConfigValidator {
             if let serverURL = github.serverURL, GitHubServer(string: serverURL) == nil {
                 issues.append(.init(severity: .error, message: "provisioner.config.serverURL must be an https URL with a host and no path, e.g. https://github.com."))
             }
+            if let setupCommands = github.setupCommands,
+               setupCommands.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                issues.append(.init(severity: .error, message: "provisioner.config.setupCommands entries must not be empty."))
+            }
         }
     }
 

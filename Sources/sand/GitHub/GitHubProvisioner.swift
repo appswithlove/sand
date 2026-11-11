@@ -8,6 +8,8 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
     let runnerGroup: String?
     /// Web URL of the GitHub instance. `nil` means github.com.
     let serverURL: String?
+    /// Shell lines run in the VM after the runner is extracted and before `config.sh`.
+    let setupCommands: [String]?
 
     init(
         appId: Int,
@@ -17,7 +19,8 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
         runnerName: String,
         extraLabels: [String]?,
         runnerGroup: String? = nil,
-        serverURL: String? = nil
+        serverURL: String? = nil,
+        setupCommands: [String]? = nil
     ) {
         self.appId = appId
         self.organization = organization
@@ -27,6 +30,7 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
         self.extraLabels = extraLabels
         self.runnerGroup = runnerGroup
         self.serverURL = serverURL
+        self.setupCommands = setupCommands
     }
 
     func resolvedServer() throws -> GitHubServer {
@@ -55,10 +59,12 @@ struct GitHubProvisioner: Sendable {
         let labels = labelsString(extraLabels: config.extraLabels)
         let url = try config.resolvedServer().runnerURL(organization: config.organization, repository: config.repository)
         let runnerGroupArgument = config.runnerGroup.map { " --runnergroup \(Self.shellQuote($0))" } ?? ""
-        return [
+        let extract = [
             "rm -rf ~/actions-runner && mkdir ~/actions-runner",
             "tar xzf ~/\(Self.tarballRemotePath) -C ~/actions-runner",
-            "echo \"Runner extracted\"",
+            "echo \"Runner extracted\""
+        ]
+        return extract + (config.setupCommands ?? []) + [
             "~/actions-runner/config.sh --url \(url) --name \(runnerName) --token \(runnerToken) --ephemeral --unattended --replace --labels \(labels)\(runnerGroupArgument)",
             "echo \"Runner configured, starting ~/actions-runner/run.sh\"",
             "~/actions-runner/run.sh"

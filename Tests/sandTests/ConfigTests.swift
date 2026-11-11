@@ -240,6 +240,62 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(try github.resolvedServer().apiBaseURL.absoluteString, "https://api.github.com")
     }
 
+    func testGHEDotComRepoRunnerWithSetupCommands() throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/cirruslabs/macos-runner:tahoe
+              cache:
+                host: ~/.cache/sand/actions-runner
+            provisioner:
+              type: github
+              config:
+                appId: 123456
+                organization: my-org
+                repository: my-repo
+                privateKeyPath: ~/my-app.private-key.pem
+                runnerName: runner-1
+                serverURL: https://acme.ghe.com
+                setupCommands:
+                  - sudo xcode-select -s /Applications/Xcode.app
+                  - "echo 'setup: done'"
+            healthCheck:
+              command: "pgrep -fl /Users/admin/actions-runner/run.sh"
+              interval: 30
+              delay: 60
+        """
+        let github = try XCTUnwrap(Config.load(path: writeTempFile(contents: yaml).path).runners.first?.provisioner.github)
+        XCTAssertEqual(github.setupCommands, ["sudo xcode-select -s /Applications/Xcode.app", "echo 'setup: done'"])
+        let server = try github.resolvedServer()
+        XCTAssertEqual(server.apiBaseURL.absoluteString, "https://api.acme.ghe.com")
+        let script = try GitHubProvisioner().script(config: github, runnerName: "runner-1-0a1b2", runnerToken: "token")
+        XCTAssertEqual(Array(script[3...4]), github.setupCommands)
+        XCTAssertTrue(script[5].hasPrefix("~/actions-runner/config.sh --url https://acme.ghe.com/my-org/my-repo --name runner-1-0a1b2"))
+    }
+
+    func testSetupCommandsDefaultToNil() throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/acme/vm:latest
+            provisioner:
+              type: github
+              config:
+                appId: 42
+                organization: acme
+                privateKeyPath: ~/key.pem
+                runnerName: runner-1
+        """
+        let github = try XCTUnwrap(Config.load(path: writeTempFile(contents: yaml).path).runners.first?.provisioner.github)
+        XCTAssertNil(github.setupCommands)
+    }
+
     func testFixturesLoad() throws {
         let fixtures = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
