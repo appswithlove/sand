@@ -143,7 +143,8 @@ struct Runner: Sendable {
             noGraphics: vm.run.noGraphics,
             noClipboard: vm.run.noClipboard,
             nested: vm.run.nested,
-            rootDiskOpts: vm.run.rootDiskOpts
+            rootDiskOpts: vm.run.rootDiskOpts,
+            netSoftnet: vm.run.netSoftnet
         )
         logRunOptions(name: name, options: runOptions)
         logger.info("boot VM \(name)")
@@ -892,7 +893,7 @@ struct Runner: Sendable {
     }
 
     private func logRunOptions(name: String, options: Tart.RunOptions) {
-        logger.info("VM \(name) run options: noGraphics=\(options.noGraphics) noAudio=\(options.noAudio) noClipboard=\(options.noClipboard) nested=\(options.nested) rootDiskOpts=\(options.rootDiskOpts ?? "default")")
+        logger.info("VM \(name) run options: noGraphics=\(options.noGraphics) noAudio=\(options.noAudio) noClipboard=\(options.noClipboard) nested=\(options.nested) rootDiskOpts=\(options.rootDiskOpts ?? "default") netSoftnet=\(options.netSoftnet)")
         if options.directoryMounts.isEmpty {
             logger.info("VM \(name) mounts: none")
             return

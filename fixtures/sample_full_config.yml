@@ -23,6 +23,7 @@ runners:
         noClipboard: false
         nested: false
         rootDiskOpts: null
+        netSoftnet: false
       diskSizeGb: null
       ssh:
         user: admin

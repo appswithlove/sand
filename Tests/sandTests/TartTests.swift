@@ -73,6 +73,15 @@ final class TartTests: XCTestCase {
         ))
     }
 
+    func testRunArgsWithSoftnet() async throws {
+        let runner = MockProcessRunner()
+        let tart = makeTart(runner)
+        var options = Tart.RunOptions.default
+        options.netSoftnet = true
+        try tart.run(name: "ephemeral", options: options)
+        XCTAssertEqual(runner.startCalls.first, .init(executable: "tart", arguments: ["run", "ephemeral", "--no-graphics", "--net-softnet"], wait: false))
+    }
+
     func testSetArgs() async throws {
         let runner = MockProcessRunner()
         let tart = makeTart(runner)
