@@ -82,6 +82,64 @@ final class TartTests: XCTestCase {
         XCTAssertEqual(runner.startCalls.first, .init(executable: "tart", arguments: ["run", "ephemeral", "--no-graphics", "--net-softnet"], wait: false))
     }
 
+    func testRunArgsWithDisks() async throws {
+        let runner = MockProcessRunner()
+        let tart = makeTart(runner)
+        var options = Tart.RunOptions(
+            directoryMounts: [Tart.DirectoryMount(hostPath: "/tmp/dir", name: "dir", readOnly: false)],
+            noAudio: false,
+            noGraphics: true,
+            noClipboard: false,
+            nested: false
+        )
+        options.disks = [
+            Tart.Disk(path: "/tmp/rw.img", readOnly: false, sync: nil),
+            Tart.Disk(path: "/tmp/ro.img", readOnly: true, sync: nil),
+            Tart.Disk(path: "/tmp/fast.img", readOnly: false, sync: "none"),
+            Tart.Disk(path: "/tmp/ro-fast.img", readOnly: true, sync: "none")
+        ]
+        try tart.run(name: "ephemeral", options: options)
+        XCTAssertEqual(runner.startCalls.first, .init(
+            executable: "tart",
+            arguments: [
+                "run", "ephemeral", "--no-graphics",
+                "--dir", "dir:/tmp/dir",
+                "--disk", "/tmp/rw.img",
+                "--disk", "/tmp/ro.img:ro",
+                "--disk", "/tmp/fast.img:sync=none",
+                "--disk", "/tmp/ro-fast.img:ro,sync=none"
+            ],
+            wait: false
+        ))
+    }
+
+    func testRunArgsWithDisksFromConfigExpandTilde() async throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/acme/vm:latest
+              disks:
+                - path: ~/ci-cache/slot-1-cas.img
+                  sync: none
+            provisioner:
+              type: script
+              config:
+                run: echo hi
+        """
+        let config = try Config.load(path: writeTempFile(contents: yaml).path)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let runner = MockProcessRunner()
+        var options = Tart.RunOptions.default
+        options.disks = try XCTUnwrap(config.runners.first?.vm.disks).map(Tart.Disk.init)
+        try makeTart(runner).run(name: "ephemeral", options: options)
+        XCTAssertEqual(runner.startCalls.first?.arguments, [
+            "run", "ephemeral", "--no-graphics", "--disk", "\(home)/ci-cache/slot-1-cas.img:sync=none"
+        ])
+    }
+
     func testSetArgs() async throws {
         let runner = MockProcessRunner()
         let tart = makeTart(runner)

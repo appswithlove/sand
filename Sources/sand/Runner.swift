@@ -144,7 +144,8 @@ struct Runner: Sendable {
             noClipboard: vm.run.noClipboard,
             nested: vm.run.nested,
             rootDiskOpts: vm.run.rootDiskOpts,
-            netSoftnet: vm.run.netSoftnet
+            netSoftnet: vm.run.netSoftnet,
+            disks: vm.disks.map(Tart.Disk.init)
         )
         logRunOptions(name: name, options: runOptions)
         logger.info("boot VM \(name)")
@@ -896,11 +897,18 @@ struct Runner: Sendable {
         logger.info("VM \(name) run options: noGraphics=\(options.noGraphics) noAudio=\(options.noAudio) noClipboard=\(options.noClipboard) nested=\(options.nested) rootDiskOpts=\(options.rootDiskOpts ?? "default") netSoftnet=\(options.netSoftnet)")
         if options.directoryMounts.isEmpty {
             logger.info("VM \(name) mounts: none")
-            return
         }
         for mount in options.directoryMounts {
             let mode = mount.readOnly ? "ro" : "rw"
             logger.info("VM \(name) mount: \(mount.name) <- \(mount.hostPath) (\(mode))")
+        }
+        if options.disks.isEmpty {
+            logger.info("VM \(name) disks: none")
+        }
+        for disk in options.disks {
+            let mode = disk.readOnly ? "ro" : "rw"
+            let sync = disk.sync.map { " sync=\($0)" } ?? ""
+            logger.info("VM \(name) disk: \(disk.path) (\(mode)\(sync))")
         }
     }
 

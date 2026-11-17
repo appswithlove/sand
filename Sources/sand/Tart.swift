@@ -27,6 +27,26 @@ struct Tart: Sendable {
         }
     }
 
+    struct Disk: Equatable {
+        let path: String
+        let readOnly: Bool
+        let sync: String?
+
+        var runArgument: String {
+            var options: [String] = []
+            if readOnly {
+                options.append("ro")
+            }
+            if let sync {
+                options.append("sync=\(sync)")
+            }
+            if options.isEmpty {
+                return path
+            }
+            return "\(path):" + options.joined(separator: ",")
+        }
+    }
+
     struct RunOptions {
         let directoryMounts: [DirectoryMount]
         let noAudio: Bool
@@ -35,6 +55,7 @@ struct Tart: Sendable {
         let nested: Bool
         var rootDiskOpts: String? = nil
         var netSoftnet: Bool = false
+        var disks: [Disk] = []
 
         static let `default` = RunOptions(directoryMounts: [], noAudio: false, noGraphics: true, noClipboard: false, nested: false)
     }
@@ -128,6 +149,10 @@ struct Tart: Sendable {
             arguments.append("--dir")
             arguments.append(mount.runArgument)
         }
+        for disk in options.disks {
+            arguments.append("--disk")
+            arguments.append(disk.runArgument)
+        }
         logger.debug("tart \(arguments.joined(separator: " "))")
         return try processRunner.start(executable: "tart", arguments: arguments)
     }
@@ -211,5 +236,11 @@ struct Tart: Sendable {
     private func run(arguments: [String], wait: Bool) async throws -> ProcessResult? {
         logger.debug("tart \(arguments.joined(separator: " "))")
         return try await processRunner.run(executable: "tart", arguments: arguments, wait: wait)
+    }
+}
+
+extension Tart.Disk {
+    init(_ disk: Config.Disk) {
+        self.init(path: disk.path, readOnly: disk.mode == .ro, sync: disk.sync)
     }
 }

@@ -18,6 +18,10 @@ runners:
         - host: ~/ci-cache
           name: cache
           mode: rw
+      disks:
+        - path: ~/ci-cache/runner-1-cas.img
+          mode: rw
+          sync: none
       run:
         noGraphics: true
         noClipboard: false

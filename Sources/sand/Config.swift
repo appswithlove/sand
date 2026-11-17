@@ -8,6 +8,7 @@ struct Config: Decodable, Sendable {
         let source: VMSource
         let hardware: Hardware?
         let mounts: [DirectoryMount]
+        let disks: [Disk]
         let cache: Cache?
         let run: RunOptions
         let diskSizeGb: Int?
@@ -17,6 +18,7 @@ struct Config: Decodable, Sendable {
             source: VMSource,
             hardware: Hardware?,
             mounts: [DirectoryMount],
+            disks: [Disk] = [],
             cache: Cache?,
             run: RunOptions,
             diskSizeGb: Int?,
@@ -25,6 +27,7 @@ struct Config: Decodable, Sendable {
             self.source = source
             self.hardware = hardware
             self.mounts = mounts
+            self.disks = disks
             self.cache = cache
             self.run = run
             self.diskSizeGb = diskSizeGb
@@ -36,6 +39,7 @@ struct Config: Decodable, Sendable {
             self.source = try container.decode(VMSource.self, forKey: .source)
             self.hardware = try container.decodeIfPresent(Hardware.self, forKey: .hardware)
             self.mounts = try container.decodeIfPresent([DirectoryMount].self, forKey: .mounts) ?? []
+            self.disks = try container.decodeIfPresent([Disk].self, forKey: .disks) ?? []
             self.cache = try container.decodeIfPresent(Cache.self, forKey: .cache)
             self.run = try container.decodeIfPresent(RunOptions.self, forKey: .run) ?? .default
             self.diskSizeGb = try container.decodeIfPresent(Int.self, forKey: .diskSizeGb)
@@ -46,6 +50,7 @@ struct Config: Decodable, Sendable {
             case source
             case hardware
             case mounts
+            case disks
             case cache
             case run
             case diskSizeGb
@@ -149,6 +154,38 @@ struct Config: Decodable, Sendable {
             case host
             case name
             case mode
+        }
+    }
+
+    /// Extra disk image attached with `tart run --disk`. It lives on the host, so it outlives the ephemeral VM.
+    struct Disk: Decodable, Sendable {
+        enum Mode: String, Decodable, Sendable {
+            case ro
+            case rw
+        }
+
+        let path: String
+        let mode: Mode
+        /// Passed as `sync=<value>`; nil keeps the tart default. The validator only accepts "none".
+        let sync: String?
+
+        init(path: String, mode: Mode = .rw, sync: String? = nil) {
+            self.path = path
+            self.mode = mode
+            self.sync = sync
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.path = try container.decode(String.self, forKey: .path)
+            self.mode = try container.decodeIfPresent(Mode.self, forKey: .mode) ?? .rw
+            self.sync = try container.decodeIfPresent(String.self, forKey: .sync)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case path
+            case mode
+            case sync
         }
     }
 
@@ -362,6 +399,9 @@ struct Config: Decodable, Sendable {
                 mode: mount.mode
             )
         }
+        let disks = vm.disks.map { disk in
+            Disk(path: Config.expandPath(disk.path), mode: disk.mode, sync: disk.sync)
+        }
         let cache = vm.cache.map { cache in
             Cache(
                 hostPath: Config.expandPath(cache.hostPath),
@@ -372,6 +412,7 @@ struct Config: Decodable, Sendable {
             source: vm.source,
             hardware: vm.hardware,
             mounts: mounts,
+            disks: disks,
             cache: cache,
             run: vm.run,
             diskSizeGb: vm.diskSizeGb,

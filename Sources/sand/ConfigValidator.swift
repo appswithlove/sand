@@ -28,6 +28,7 @@ final class ConfigValidator {
         // so it must never share a name with a local source image. Tart VMs are directories,
         // and macOS volumes are case-insensitive by default, so names are compared lowercased.
         let localSourceNames = Set(runners.compactMap { $0.vm.source.type == .local ? $0.vm.source.name?.lowercased() : nil })
+        let sharedDiskPaths = sharedWritableDiskPaths(runners)
 
         for runner in runners {
             let trimmedName = runner.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -54,6 +55,12 @@ final class ConfigValidator {
                 runnerIssues.append(.init(severity: .error, message: "runner name must differ from every local vm.source.name."))
             }
             validateVM(runner.vm, issues: &runnerIssues)
+            for disk in runner.vm.disks where sharedDiskPaths.contains(Self.diskKey(disk.path)) {
+                runnerIssues.append(.init(
+                    severity: .error,
+                    message: "vm.disks.path is used more than once with at least one rw attachment: \(disk.path.trimmingCharacters(in: .whitespacesAndNewlines)). A rw disk must not be attached to two VMs."
+                ))
+            }
             validateProvisioner(runner.provisioner, issues: &runnerIssues)
             if let healthCheck = runner.healthCheck {
                 validateHealthCheck(healthCheck, issues: &runnerIssues)
@@ -126,6 +133,53 @@ final class ConfigValidator {
             let resolvedName = Config.resolveMountName(hostPath: mount.hostPath, name: mount.name)
             validateMountName(resolvedName, label: "vm.mounts.name", issues: &issues)
         }
+
+        for disk in vm.disks {
+            validateDisk(disk, issues: &issues)
+        }
+    }
+
+    private func validateDisk(_ disk: Config.Disk, issues: inout [ConfigValidationIssue]) {
+        if let sync = disk.sync, sync != "none" {
+            issues.append(.init(severity: .error, message: "vm.disks.sync must be 'none' when set: \(sync)."))
+        }
+        let path = disk.path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if path.isEmpty {
+            issues.append(.init(severity: .error, message: "vm.disks.path must not be empty."))
+            return
+        }
+        // tart reads everything after the first ':' as disk options.
+        if path.contains(":") {
+            issues.append(.init(severity: .error, message: "vm.disks.path must not contain ':': \(path)."))
+            return
+        }
+        let resolved = (path as NSString).resolvingSymlinksInPath
+        guard let type = try? FileManager.default.attributesOfItem(atPath: resolved)[.type] as? FileAttributeType else {
+            issues.append(.init(severity: .error, message: "vm.disks.path does not exist: \(path)."))
+            return
+        }
+        if type != .typeRegular {
+            issues.append(.init(severity: .error, message: "vm.disks.path must be a regular file: \(path)."))
+        }
+    }
+
+    /// Paths attached more than once (across all runners) where at least one attachment is rw.
+    private func sharedWritableDiskPaths(_ runners: [Config.RunnerConfig]) -> Set<String> {
+        var attachments: [String: (count: Int, writable: Bool)] = [:]
+        for disk in runners.flatMap(\.vm.disks) {
+            let key = Self.diskKey(disk.path)
+            guard !key.isEmpty else {
+                continue
+            }
+            let current = attachments[key] ?? (0, false)
+            attachments[key] = (current.count + 1, current.writable || disk.mode == .rw)
+        }
+        return Set(attachments.filter { $0.value.count > 1 && $0.value.writable }.keys)
+    }
+
+    private static func diskKey(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "" : (trimmed as NSString).standardizingPath
     }
 
     private func validateHealthCheck(_ healthCheck: Config.HealthCheck, issues: inout [ConfigValidationIssue]) {

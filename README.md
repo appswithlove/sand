@@ -211,6 +211,22 @@ Set `netSoftnet: true` to boot the VM with `tart run --net-softnet` (Softnet net
 
 Set `rootDiskOpts` to tune the root disk with `tart run --root-disk-opts`. Since runner VMs are thrown away after each job, `caching=cached,sync=none` trades crash consistency for much faster guest fsync.
 
+### Extra disks
+
+`vm.disks` attaches disk images to each VM with `tart run --disk`. The image stays on the host, so its data outlives the ephemeral VM. Use it for a build cache that needs `mmap`, for example the Xcode compilation cache, which a `vm.mounts` (virtiofs) directory does not support.
+
+```
+runners:
+  - name: runner-1
+    vm:
+      disks:
+        - path: ~/ci-cache/runner-1-cas.img  # required; ~ is expanded
+          mode: rw                            # rw (default) or ro
+          sync: none                          # optional; only value: none. Omit for the tart default
+```
+
+sand only attaches the disk. Create a raw image on the host before the first run (for example `mkfile -n 50g ~/ci-cache/runner-1-cas.img`). Format it once and mount it in the guest, for example in `preRun`. `sand validate` rejects a path that does not exist, is not a regular file, or contains `:`. It also rejects a path that two runners attach when one of them uses `rw`, because a disk must not be written by two running VMs.
+
 Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml) or [fixtures/sample_on_prod.yml](fixtures/sample_on_prod.yml)
 
 ## Acknowledgements

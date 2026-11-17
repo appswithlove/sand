@@ -299,6 +299,70 @@ final class ConfigTests: XCTestCase {
         XCTAssertNil(github.setupCommands)
     }
 
+    func testDisksDecodeWithDefaultsAndExpandPaths() throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/acme/vm:latest
+              disks:
+                - path: ~/ci-cache/slot-1-cas.img
+                - path: /Volumes/cache/ro.img
+                  mode: ro
+                  sync: none
+            provisioner:
+              type: script
+              config:
+                run: echo hi
+        """
+        let disks = try XCTUnwrap(Config.load(path: writeTempFile(contents: yaml).path).runners.first?.vm.disks)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        XCTAssertEqual(disks.count, 2)
+        XCTAssertEqual(disks[0].path, "\(home)/ci-cache/slot-1-cas.img")
+        XCTAssertEqual(disks[0].mode, .rw)
+        XCTAssertNil(disks[0].sync)
+        XCTAssertEqual(disks[1].path, "/Volumes/cache/ro.img")
+        XCTAssertEqual(disks[1].mode, .ro)
+        XCTAssertEqual(disks[1].sync, "none")
+    }
+
+    func testDisksDefaultToEmpty() throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/acme/vm:latest
+            provisioner:
+              type: script
+              config:
+                run: echo hi
+        """
+        let vm = try XCTUnwrap(Config.load(path: writeTempFile(contents: yaml).path).runners.first?.vm)
+        XCTAssertTrue(vm.disks.isEmpty)
+    }
+
+    func testDiskWithoutPathFailsToDecode() throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/acme/vm:latest
+              disks:
+                - mode: ro
+            provisioner:
+              type: script
+              config:
+                run: echo hi
+        """
+        XCTAssertThrowsError(try Config.load(path: writeTempFile(contents: yaml).path))
+    }
+
     func testFixturesLoad() throws {
         let fixtures = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

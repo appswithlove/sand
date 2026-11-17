@@ -288,4 +288,55 @@ final class ConfigValidatorTests: XCTestCase {
             message: "runner runner-1: provisioner.config.setupCommands entries must not be empty."
         )])
     }
+
+    func testDiskValidation() throws {
+        let image = try writeTempFile(contents: "img", suffix: ".img")
+        let directory = image.deletingLastPathComponent()
+        let provisioner = Config.Provisioner(type: .script, script: .init(run: "echo hi"), github: nil)
+        func runner(_ name: String, _ disks: [Config.Disk]) -> Config.RunnerConfig {
+            let vm = Config.VM(
+                source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", name: nil),
+                hardware: nil,
+                mounts: [],
+                disks: disks,
+                cache: nil,
+                run: .default,
+                diskSizeGb: nil,
+                ssh: .standard
+            )
+            return Config.RunnerConfig(name: name, vm: vm, provisioner: provisioner, preRun: nil, postRun: nil, stopAfter: nil, healthCheck: nil)
+        }
+        func issues(_ disks: [Config.Disk]) -> [ConfigValidationIssue] {
+            ConfigValidator().validate(Config(runners: [runner("runner-1", disks)]))
+        }
+        func error(_ message: String, runner: String = "runner-1") -> ConfigValidationIssue {
+            ConfigValidationIssue(severity: .error, message: "runner \(runner): \(message)")
+        }
+
+        XCTAssertEqual(issues([Config.Disk(path: image.path)]), [])
+        XCTAssertEqual(issues([Config.Disk(path: image.path, mode: .ro, sync: "none")]), [])
+        XCTAssertEqual(issues([Config.Disk(path: "  ")]), [error("vm.disks.path must not be empty.")])
+        XCTAssertEqual(issues([Config.Disk(path: "/tmp/a:b.img")]), [error("vm.disks.path must not contain ':': /tmp/a:b.img.")])
+        let missing = directory.appendingPathComponent("missing.img").path
+        XCTAssertEqual(issues([Config.Disk(path: missing)]), [error("vm.disks.path does not exist: \(missing).")])
+        XCTAssertEqual(issues([Config.Disk(path: directory.path)]), [error("vm.disks.path must be a regular file: \(directory.path).")])
+        XCTAssertEqual(issues([Config.Disk(path: image.path, sync: "full")]), [error("vm.disks.sync must be 'none' when set: full.")])
+
+        // A disk must not be attached to two running VMs when any attachment writes to it.
+        func sharedIssues(_ first: Config.Disk, _ second: Config.Disk) -> [ConfigValidationIssue] {
+            ConfigValidator().validate(Config(runners: [runner("runner-1", [first]), runner("runner-2", [second])]))
+        }
+        let shared = "vm.disks.path is used more than once with at least one rw attachment: \(image.path). A rw disk must not be attached to two VMs."
+        XCTAssertEqual(
+            sharedIssues(Config.Disk(path: image.path), Config.Disk(path: image.path)),
+            [error(shared), error(shared, runner: "runner-2")]
+        )
+        XCTAssertEqual(
+            sharedIssues(Config.Disk(path: image.path), Config.Disk(path: image.path, mode: .ro)),
+            [error(shared), error(shared, runner: "runner-2")]
+        )
+        XCTAssertEqual(sharedIssues(Config.Disk(path: image.path, mode: .ro), Config.Disk(path: image.path, mode: .ro)), [])
+        let samePathSpelledDifferently = directory.appendingPathComponent(".").path + "/" + image.lastPathComponent
+        XCTAssertEqual(sharedIssues(Config.Disk(path: image.path), Config.Disk(path: samePathSpelledDifferently)).count, 2)
+    }
 }
