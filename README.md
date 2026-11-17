@@ -213,7 +213,7 @@ Set `rootDiskOpts` to tune the root disk with `tart run --root-disk-opts`. Since
 
 ### Extra disks
 
-`vm.disks` attaches disk images to each VM with `tart run --disk`. The image stays on the host, so its data outlives the ephemeral VM. Use it for a build cache that needs `mmap`, for example the Xcode compilation cache, which a `vm.mounts` (virtiofs) directory does not support.
+`vm.disks` (an addition of this fork) attaches disk images to each VM with `tart run --disk`. The image stays on the host, so its data outlives the ephemeral VM. Use it for a build cache that needs `mmap`, for example the Xcode compilation cache, which a `vm.mounts` (virtiofs) directory does not support.
 
 ```
 runners:
